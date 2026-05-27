@@ -1306,15 +1306,25 @@
           <section ref="dashboardNotificationCenter" class="dash-card rail-card notification-center-card" tabindex="-1">
             <div class="card-title-row">
               <h2>Notifications</h2>
-              <span>{{ dashboardNotificationRows.length }}</span>
+              <span>{{ dashboardUnreadNotificationCount ? `${dashboardUnreadNotificationCount} new` : `${dashboardNotificationRows.length} total` }}</span>
             </div>
             <div v-if="dashboardNotificationRows.length" class="notification-center-list">
-              <article v-for="note in dashboardNotificationRows" :key="note.id">
+              <article
+                v-for="note in dashboardNotificationRows"
+                :key="note.id"
+                :class="{ unread: !note.seen }"
+                role="button"
+                tabindex="0"
+                @click="markDashboardNotificationSeen(note.id)"
+                @keydown.enter.prevent="markDashboardNotificationSeen(note.id)"
+                @keydown.space.prevent="markDashboardNotificationSeen(note.id)"
+              >
                 <span :class="['notification-dot', note.tone]" />
                 <div>
                   <strong>{{ note.subject }}</strong>
                   <p>{{ note.body }}</p>
                   <small>{{ note.meta }}</small>
+                  <span class="notification-state">{{ note.seen ? 'Seen' : 'New' }}</span>
                 </div>
               </article>
             </div>
@@ -1322,9 +1332,14 @@
               <strong>{{ dashboardNotificationsLoading ? 'Loading notifications...' : 'No notifications yet' }}</strong>
               <p>{{ dashboardNotificationsLoading ? 'Fetching delivery records.' : dashboardNotificationsError || 'Project updates and delivery notices will appear here.' }}</p>
             </article>
-            <button class="rail-link-button" type="button" @click="loadDashboardNotifications">
-              Refresh notifications
-            </button>
+            <div class="notification-center-actions">
+              <button v-if="dashboardNotificationRows.length" class="rail-link-button" type="button" @click="markAllDashboardNotificationsSeen">
+                Mark all seen
+              </button>
+              <button class="rail-link-button" type="button" @click="loadDashboardNotifications">
+                Refresh notifications
+              </button>
+            </div>
           </section>
 
           <section class="dash-card rail-card chat-card">
@@ -2354,6 +2369,23 @@ function removeStoredToken() {
   }
 }
 
+function readStoredNotificationSeenIDs() {
+  try {
+    const rows = JSON.parse(browserStorage?.getItem('mergeos_seen_notifications') || '[]');
+    return new Set(Array.isArray(rows) ? rows.filter(Boolean).map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeStoredNotificationSeenIDs(ids) {
+  try {
+    browserStorage?.setItem('mergeos_seen_notifications', JSON.stringify(Array.from(ids).slice(-200)));
+  } catch {
+    // A seen marker is a convenience only; notifications still render correctly.
+  }
+}
+
 const token = ref(readStoredToken());
 const user = ref(null);
 const authVisible = ref(false);
@@ -2405,6 +2437,7 @@ const dashboardLedgerEntries = ref([]);
 const dashboardNotifications = ref([]);
 const dashboardNotificationsLoading = ref(false);
 const dashboardNotificationsError = ref('');
+const seenNotificationIDs = ref(readStoredNotificationSeenIDs());
 const dashboardLoading = ref(false);
 const dashboardError = ref('');
 const dashboardSearch = ref('');
@@ -3235,7 +3268,13 @@ const dashboardNotificationRows = computed(() =>
     .slice(0, 8)
     .map(mapDashboardNotification),
 );
-const dashboardNotificationCount = computed(() => Math.min(9, dashboardNotificationRows.value.length));
+const dashboardUnreadNotificationCount = computed(() =>
+  dashboardNotificationRows.value.filter((note) => !note.seen).length,
+);
+const dashboardNotificationCount = computed(() => {
+  const count = dashboardUnreadNotificationCount.value || dashboardNotificationRows.value.length;
+  return count > 9 ? '9+' : String(count);
+});
 
 const marketplaceBenefits = [
   {
@@ -4047,13 +4086,37 @@ function mapDashboardActivity(entry = {}) {
 
 function mapDashboardNotification(note = {}) {
   const when = formatLedgerDateTime(note.created_at);
+  const id = note.id || `${note.subject}-${note.created_at}`;
+  const status = String(note.status || 'logged').split(':').pop() || 'logged';
+  const projectRef = note.project_id ? `Project ${String(note.project_id).slice(-6).toUpperCase()}` : 'Workspace';
   return {
-    id: note.id || `${note.subject}-${note.created_at}`,
+    id,
     subject: note.subject || 'Notification',
     body: trimMarketplaceText(note.body, 'MergeOS status update.'),
-    meta: `${toTitleLabel(note.channel || 'app')} · ${toTitleLabel(note.status || 'logged')} · ${when.full}`,
     tone: note.status === 'failed' ? 'red' : note.project_id ? 'green' : 'blue',
+    meta: [toTitleLabel(note.channel || 'app'), toTitleLabel(status), projectRef, when.full].join(' - '),
+    seen: seenNotificationIDs.value.has(String(id)),
   };
+}
+
+function markDashboardNotificationSeen(id) {
+  if (!id) return;
+  const normalizedID = String(id);
+  if (seenNotificationIDs.value.has(normalizedID)) return;
+  const next = new Set(seenNotificationIDs.value);
+  next.add(normalizedID);
+  seenNotificationIDs.value = next;
+  writeStoredNotificationSeenIDs(next);
+}
+
+function markAllDashboardNotificationsSeen() {
+  if (!dashboardNotificationRows.value.length) return;
+  const next = new Set(seenNotificationIDs.value);
+  for (const note of dashboardNotificationRows.value) {
+    next.add(String(note.id));
+  }
+  seenNotificationIDs.value = next;
+  writeStoredNotificationSeenIDs(next);
 }
 
 function formatLedgerDateTime(value) {

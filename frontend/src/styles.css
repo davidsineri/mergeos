@@ -5926,6 +5926,22 @@ svg {
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr);
   gap: 10px;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.notification-center-list article:hover,
+.notification-center-list article:focus-visible {
+  background: #f8fafc;
+}
+
+.notification-center-list article.unread {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.notification-center-list article.unread strong {
+  color: #0f172a;
 }
 
 .notification-dot {
@@ -5978,6 +5994,35 @@ svg {
   color: #7b8492;
   font-size: 10px;
   font-weight: 720;
+}
+
+.notification-state {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: #eef2ff;
+  padding: 3px 7px;
+  color: #3730a3;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.notification-center-list article:not(.unread) .notification-state {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.notification-center-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.notification-center-actions .rail-link-button {
+  min-width: 0;
 }
 
 .chat-input {
