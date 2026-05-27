@@ -4478,6 +4478,9 @@ function clearSession() {
   dashboardError.value = '';
   selectedDashboardProjectID.value = '';
   removeStoredToken();
+  if (publicPage.value === 'dashboard') {
+    openPublicPage('home');
+  }
 }
 
 async function submitAuth() {
